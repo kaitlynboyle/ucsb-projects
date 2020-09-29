@@ -1,0 +1,308 @@
+## PSTAT 126 Final Project 
+
+
+```{r}
+dat = read.table("realestate.txt", header = T)
+names(dat)
+head(dat)
+attach(dat)
+```
+
+```{r}
+y = dat$SalePrice
+x1 = dat$SqFeet 
+x2 = dat$Beds 
+x3 = dat$Baths 
+x4 = dat$Air 
+x5 = dat$Garage 
+x6 = dat$Pool 
+x7 = dat$Year 
+x8 = factor(dat$Quality) 
+x9 = dat$Style 
+x10 = dat$Lot 
+x11 = dat$Highway
+```
+
+```{r}
+pairs(y ~ x1  + x7 + x8 + x9 + x10 )
+```
+
+
+
+
+
+### Transformations
+
+
+## boxcox first to transform y variable
+
+```{r}
+summary(powerTransform(cbind(x1,x2,x3,x7,x10) ~ 1))
+newy = log(y)
+newx1 = x1^(-0.5)
+```
+
+
+
+
+## Boxcox
+
+```{r}
+library(MASS)
+boxcox(lm(y ~ x1 + x7 + x8 + x9 + x10 + x1:x7 + x8:x9), lambda = seq(-1,1))
+
+```
+
+### Finding best subset
+```{r}
+library(leaps)
+mod = regsubsets(cbind(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11), y)
+summary.mod = summary(mod)
+summary.mod$which
+summary.mod$cp
+summary.mod$adjr2
+summary.mod$bic    
+```
+
+
+
+
+```{r}
+## x1, x8, x9, x7, x10 are important terms based on BIC test
+mod0 = lm(y ~ x1 + x8)
+summary(mod0)
+add1(mod0, ~.+x1:x8, test = 'F')
+mod1 = update(mod0, ~.+x1:x8)
+summary(mod1)
+add1(mod1, ~.+x1:x9+x8:x9, test = 'F')
+mod2 = update(mod1, ~.+x1:x9)
+summary(mod2)
+
+mod22 = update(mod0, ~.+x9)
+add1(mod22, ~.+x1:x9+x8:x9, test = 'F')
+summary(mod22)
+mod23 = update(mod22, ~.+x8:x9)
+summary(mod23)
+anova(mod22, mod23)
+
+mod3 = update(mod23, ~.+x7)
+summary(mod3)   ## no interaction
+add1(mod3, ~.+x1*x7+x8*x7+x9*x7, test = 'F')
+mod4 = update(mod3, ~.+x1:x7)
+summary(mod4)   #includes x1:x7
+anova(mod3,mod4)  
+
+
+mod5 = update(mod4,~.+x10 )
+summary(mod5)
+add1(mod5, ~.+x1*x10+x8*x10+x7*x10+x9*x10, test = 'F')
+mod6 = update(mod5, ~.+x10)   ## don't include interaction, final model
+summary(mod6)
+```
+
+
+```{r}
+## final model lm(y ~ x1 + x8 + x9 + x7 + x10 + x1:x7 + x8:x9)
+anova(mod5,mod6)
+
+```
+
+
+```{r}
+summary(powerTransform(cbind(x1,x7,x8,x9,x10) ~ 1))
+```
+
+
+
+
+## Final fit
+```{r}
+fitf = lm(newy ~ newx1+ x8 + x7 + x10 + x9 + x8:x9 + x1:x7 , data = dat)
+fitnoint =  lm(newy ~ newx1+ x8 + x7 + x10 + x9)
+
+summary(fitf)   ## best model so far with optimized number of parameters
+```
+
+```{r}
+plot(fitf, which = 2)   ##Residuals tend to bounce randomly along 0 
+plot(fitf, which = 3)   ##Most of points fall on the normall Q-Q line with the exception of a few outliers
+```
+
+
+```{r}
+sort(cooks.distance(lm(newy ~ newx1+ x8 + x7 + x10 + x9)))
+#### Analyzing outliers
+
+```
+
+
+```{r}
+## Cook's distance
+cd = cooks.distance(fitf)
+sort(cd)    ## no influential according to Cooks distance where cd > 0.5
+```
+
+
+```{r}
+## DFFITS
+criterion = 2* sqrt((10+1)/(length(x6)-10-1))   ## p = 10; n = length(x1)
+DFFITS = dffits(fitf)
+sort(abs(DFFITS[DFFITS > criterion]))   ## values that exceed criterion 2 * sqrt((p+1)/(n-p-1))
+```
+
+```{r}
+## Externally studentized residuals for outlier (Greater than 3 for )
+ESR = abs(rstudent(fitf))
+sort(ESR[ESR > 3])   ## 513, 11, 202, 24 have externally studentized values greater than 3
+```
+
+```{r}
+## Internally Studentized residuals
+ISR = abs(rstandard(fitf))
+sort(ISR[ISR > 3])  ## 513, 11, 202, 24 have internally studentized values greater than 3
+
+##parameters = all betas 
+```
+
+
+```{r}
+## High leverage values
+hv = hatvalues(fitf)
+criteria = 3 * (10/length(x1))    ## criteria if hii > 3 * (p / n)
+sort(hv[hv > criteria])     ## influential points
+```
+
+```{r}
+## High leverage points where ISR > 3
+subset(dat, hv > criteria & ISR > 3)  ## 202, 11
+```
+
+```{r}
+## High leverage points where DFFITS > criterion
+subset(dat, hv > criteria & DFFITS > criterion)   ## 202, 96, 74
+```
+
+```{r}
+## High leverage points where ISR > 3 and DFFITS > criterion
+subset(dat, hv > criteria & ISR > 3 & DFFITS > criterion)  ## 202
+```
+
+```{r}
+p202 = dat[-c(201),]
+```
+
+
+```{r}
+## Points of interest: *202, 96, 74, 11
+attach(p202)
+py = log(SalePrice)
+px1 = SqFeet^(-0.5)
+px7 = Year 
+px8 = factor(Quality) 
+px9 = Style 
+px10 = Lot 
+```
+
+```{r}
+fitf202 = lm(py ~ px1+ px8 + px7 + px10 + px9 + px8:px9 + px1:px7 , data = p202)
+summary(fitf202)
+f202 = plot(fitf202, which = 2)
+summary(fitf)
+plot(fitf, which = 2)
+plot(newx1, newy)
+lines(px1 ,fitted(fitf202) )
+```
+
+
+```{r}
+anova(fitf, fitf202)
+```
+
+```{r}
+p96 = dat[-96,]
+attach(p96)
+fy = log(SalePrice)
+fx1 = SqFeet^(-0.5)
+fx7 = Year 
+fx8 = factor(Quality) 
+fx9 = Style 
+fx10 = Lot 
+```
+
+```{r}
+fitf96 = lm(fy ~ fx1+ fx8 + fx7 + fx10 + fx9 + fx8:fx9 + fx1:fx7 , data = p96)
+plot(fitf96, which = 2)
+```
+
+```{r}
+p513 = dat[-c(513),]
+## Points of interest: *202, 96, 74, 11
+attach(p513)
+p513y = log(SalePrice)
+p513x1 = SqFeet^(-0.5)
+p513x7 = Year 
+p513x8 = factor(Quality) 
+p513x9 = Style 
+p513x10 = Lot
+```
+
+```{r}
+fitf513 = lm(p513y ~ p513x1+ p513x8 + p513x7 + p513x10 + p513x9 + p513x8:p513x9 + p513x1:p513x7 , data = p513)
+summary(fitf513)
+plot(fitf513, which = 2)
+```
+
+```{r}
+pall = dat[-c(513,201,11,24, 202, 512),]
+## Points of interest: *202, 96, 74, 11
+attach(pall)
+pally = log(SalePrice)
+pallx1 = SqFeet^(-0.5)
+pallx7 = Year 
+pallx8 = factor(Quality) 
+pallx9 = Style 
+pallx10 = Lot
+```
+
+```{r}
+fitfall = lm(pally ~ pallx1+ pallx8 + pallx7 + pallx10 + pallx9 + pallx8:pallx9 + pallx1:pallx7 , data = pall)
+summary(fitfall)
+plot(fitfall, which = 2)
+plot(fitfall, which = 3)
+```
+
+
+```{r}
+p11 = dat[-11,]
+attach(p11)
+f11y = log(SalePrice)
+f11x1 = SqFeet^(-0.5)
+f11x7 = Year 
+f11x8 = factor(Quality) 
+f11x9 = Style 
+f11x10 = Lot 
+
+fitf11 = lm(f11y ~ f11x1+ f11x8 + f11x7 + f11x10 + f11x9 + f11x8:f11x9 + f11x1:f11x7 , data = p11)
+plot(fitf11, which = 2)
+summary(fitf11)
+```
+
+
+```{r}
+p24 = dat[-24,]
+attach(p24)
+f24y = log(SalePrice)
+f24x1 = SqFeet^(-0.5)
+f24x7 = Year 
+f24x8 = factor(Quality) 
+f24x9 = Style 
+f24x10 = Lot 
+
+fitf24 = lm(f24y ~ f24x1+ f24x8 + f24x7 + f24x10 + f24x9 + f24x8:f24x9 + f24x1:f24x7 , data = p24)
+plot(fitf24, which = 2)
+summary(fitf24)
+
+plot(fitf, which = 1)
+plot(fitfall,which = 1)
+```
+
