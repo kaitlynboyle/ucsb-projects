@@ -1,0 +1,276 @@
+---
+title: "United States Candy Production Time Series Analysis"
+author: "Kaitlyn Boyle, Dorsa Jenab, Clayton Van Hovel, Derek Mahn, Nicolle Yaranga"
+date: "May 16, 2018"
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+## Abstract
+  Candy production can give us a glimpse of other aspects of our world such as economic or health effects and fulfill the curiosity of the candy connoisseur. Our groups goal for this project is to forecast monthly candy production in the United States based off of our data aging back to 1981 until 2017 (starting from Jaunary 1, 21981). We attempt several transformations and use differencing to remove the trend and seasonality within our original data. We chose an SARIMA(4,1,3) x (1,1,0)12 model to represent our candy production data and use it to forecast a year of candy production, January 1, 2016 to January 1, 2017. The absolute percentage error of the forecast is _____. 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(warn=-1)
+```
+## 1 Introduction 
+  For many Americans candy is an integral part of their diet, for others they would be unaffected by its disappearance. The amount of candy consumption is tightly related to candy production. The mass amounts of candy production in the United States can affect our society in many different ways such as economic and health trends. Lots of candy produced potentially means many new jobs but an increase in production could lead to an increase in consumption, causing declines in health throughout the nation. Being able to draw conclusions from this data and forecast future candy production will help us determine its effect on other factors that affect us more directly.  
+  Our goal for this project is to create the most effective model possible to predict candy production for future times. The data spans from January of 1981 until August of 2017 with 441 observations and monthly candy production being the variable of interest. After exploring the initial data plots and observing immediate deviations, we decided to truncate the data to start from January 1st, 1981 to August 2017. We attempt to stabilize the variance and make the time-series stationary using a Box-Cox transformations. Next, we difference the data to remove seasonality and trend. At this point, we are able to make initial conjectures on the orders of models based off of the ACF and PACF plots of the data. We used the Akaike Information Criterion to select a few models to further explore in diagnostic testing. Keeping the Principle of Parsimony in mind, we concluded a final model of __SARIMA(0,1,1) x(0,1,1)12 ___ as it has fewer parameters. We tested this model to forecast a year of candy production and compared our prediction against our data from Jan 1st, 2016 to Jan 1st, 2017. We were able to achieve a mean absolute percentage error of ___.	  
+
+## 2 Exploratory Data Analysis 
+### 2.1 Data Exploration 
+  Our dataset consists of monthly Industrial Production Index (IPI) values ranging from January 1972 to August 2017. The Industrial Production Index measures monthly real production output of candy manufacturers relative to the base year. We observed an average IPI of 100.6625, a minimum IPI of 50.6689 and a maximum IPI of 139.9153. Below you can see a plot of all the observations.
+```{r time series plot, echo=FALSE}
+candy <- read.table("candy_production.csv", sep = ",", header = FALSE, skip = 1)
+#head(candy)
+candyts <- ts(candy[,2], start = c(1981, 1), frequency = 12)
+ts.plot(candyts, xlab="Year", ylab=expression(X[t]), main="Figure 1: Candy Production Time Series") 
+
+```
+  By simply looking at the plot of the observations we notice obvious deviations in the earlier years. In order to find a better model, we decided to remove these deviations and start our data observations from January 1st, 1981. There is an evident seasonality component as the data was collected monthly. There is also a trend present, gradually increasing up until around 2005 where it begins to fall but slowly picks up again around 2011. Before applying any type of transformation, note that the variance of our data is        
+  Since our data has a seasonality, a trend and large variance, we can deduce that the time series data is needs to be transformed and differences.
+
+```{r acf and pacf of time series, echo=FALSE}
+op = par(mfrow = c(1,2))
+acf(candyts, lag.max=100, main="")
+pacf(candyts, lag.max=100, main="")
+title("Figure 2: ACF and PACF of Candy Production Data", line = -1, outer=TRUE)
+par(op)
+```
+  Figure 2 shows the ACF cyclically decreasing geometrically, indicating that there is a seasonal component present in our data. 
+  
+### 2.2 Box-Cox Transformation
+  In attempt to make the data stationary and stabilize the variance, we used a Box-Cox transformation. We performed the following calculation to the original data. $X_t$ represents the original data:
+  [INSERT BOX COX FORMULA HERE]
+  
+```{r boxcox transformation, echo=FALSE}
+library(MASS)
+t = 1:length(candyts)
+fit = lm(candyts ~ t)
+bcTransform = boxcox(candyts ~ t, plotit = TRUE)
+lambda = bcTransform$x[which(bcTransform$y == max(bcTransform$y))]
+candy.bc = (1/lambda)*(candyts^lambda-1)
+title("Figure 3: Log-Likelihood of Box Cox transformation")
+```
+  $Y_t$ is the transformed data with $\lambda$  as a parameter that is determined by the max log-likelihood. The optimal $\lambda$ we find is 0.7878788; however, $\lambda$ = 1 is still included in the 95 percentile. Although the variance was reduced to ____, a box-cox transformation is harder to interpret, thus we chose to stick with the original data. 
+
+```{r include=FALSE}
+ts.plot(candy.bc,main = "Figure 3: Box-Cox tranformed data", ylab = expression(Y[t]))
+```
+
+```{r acf and pacf of box-cox transformation, echo=FALSE}
+var(candyts)
+var(candy.bc)
+op = par(mfrow = c(1,2))
+acf(candy.bc, lag.max = 100, main="")
+pacf(candy.bc, lag.max = 100, main="")
+title("Figure 4: ACF and PACF of Box-Cox Transformed Data", line = -1, outer=TRUE)
+par(op)
+```
+  The slow decay of the ACF of $Y_t$ reveals that $Y_t$ is non stationary (reference Figure 3). Also, we noticed a decrease in the variance from 245.1008 to 16.18151.
+  
+```{r differencing, echo=FALSE}
+y1 = diff(candyts, 1)
+plot(y1, main = "De-trended Time Series", ylab = expression(nabla~Y[t]))
+abline(h = 0, lty = 2)
+y12 = diff(y1, 12)
+ts.plot(y12,main = "De-trended/seasonalized Time Series",ylab = expression(nabla^{12}~nabla~Y[t]))
+abline(h = 0,lty = 2)
+```
+```{r include=FALSE}
+var(candyts)
+var(y1)
+```
+### 2.3 Differencing
+#### 2.3.1 De-Trending
+  We continue to perform differencing to remove the trend and seasonality. Figure 1 displays an obvious trend, so we difference the data at lag 1 in efforts to remove that trend. The variance was reduced from 245.1008 to 73.52247. We differenced once more but the variance increased to 111.0935, implying the data was overdifferenced. 
+```{r differenced at lag 1 acf pacf, echo=FALSE}
+#install.packages("tseries")
+#library(tseries)
+op = par(mfrow = c(1,2))
+acf(y1,lag.max = 60,main = "")
+pacf(y1,lag.max = 60,main = "")
+title("Figure 5: ACF and PACF of De-Trended Data", line = -1, outer=TRUE)
+par(op)
+```
+  De-trending the data once did not change the ACF plot much. Figure 5 still shows the ACF showing a geometrically decreasing pattern towards 0. 
+
+#### 2.3.2 De-Seasonalizing
+  Since the ACF still has a cyclycal pattern, we need to remove seasonality. Knowing the data was collected with a 12-month period, we differenced the original data at lag 12 to remove the seasonality. The variance decreased from 73.52247 to 19.87893.
+  Overall, we only differenced the data at lag 1 and again at lag 12. 
+  
+```{r include=FALSE}
+var(candyts)
+var(y1)
+y2 = diff(y1,1)
+var(y2) # shows that we only need to difference once
+      
+var(y12) 
+
+```
+
+
+
+```{r differenced at lag 12 acf pacf, echo=FALSE}
+
+op = par(mfrow = c(1,2))
+acf(y12,lag.max = 100,main = "")
+pacf(y12,lag.max = 100,main = "")
+title("Figure 6: De-trended/seasonalized Time Series",line = -1, outer=TRUE)
+par(op)
+```
+ 
+```{r echo=FALSE}
+library(tseries)
+adf.test(y12, k =12)
+```
+ 
+  To confirm whether differenced model is stationary, we applied the Augmented Dickey-Fuller Test and received a insignificant p-value. Therefore, we  failed to reject the null hypothesis and confirmed with 95% confidence that the data is now stationary.
+
+## 3 Model Building
+  After removing the trend and seasonality to produce a stationary series, we can fit the data into a SARIMA model. A SARIMA model is illustrated by SARIMA(p,d,q)×(P,D,Q)s where p = non-seasonal AR order, d = non-seasonal differencing, q = non-seasonal MA order, P = seasonal AR order, D = seasonal differencing, Q = seasonal MA order, and s = the length of the season. 
+  As the data was collected monthly and we de-seasonilized the data by differencing at lag 12, S = 12 and D =1. Since we differenced the de-seasonlized data only once before the variance began to increase, d =1. To find the order of the p,q ,and P, Q we use preliminary conjectures based off of the ACF and PACF of the data, followed by AIC comparisons to arrive to a final model. 
+
+### 3.1 Analyzing ACF and PACF of De-trended/seasonlized Data
+  To determine the order of seasonal components (P and Q) we observe Figure 6 at lags 12, 24, 36, and so on. The ACF shows a prominent peak at lag 12 while the PACF tails off at lag 12. As a result, we are led to believe the MA order is 1 (Q =1) and the AR order is 0 (P=0).
+  To determine the order of the non-season components (p and q) we observe the plot at the lags within each season (1,2,...,11). 
+The ACF seems to cut off after lag 1 while the PACF shows peaks at lags 1, 2, and 3. These graphs suggests several candidates for p and q. So we consider models for p = { 0,1} and q = {1,2,3} which we will further explore through AIC comparisons. 
+
+### 3.2 Model Selection
+  Of these possible models, we compare the AIC, looking for the model with the lowest, most negative AIC. 
+```{r model estimation, echo=FALSE}
+fit_arma11 = arima(y12, order = c(1,0,1), method = "ML")
+fit_arma12 = arima(y12, order = c(1,0,2), method = "ML")
+fit_arma21 = arima(y12, order = c(2,0,1), method = "ML")
+fit_arma23 = arima(y12, order = c(2,0,3), method = "ML")
+
+##install packages before this
+##packages -> install -> qpcR -> make sure install dependencies box is checked 
+
+library(Matrix)
+library(robustbase)
+library(rgl)
+library(minpack.lm)
+library(MASS)
+library(qpcR)
+
+aiccs <- matrix(NA, nr = 4, nc = 4)
+for(p in 0:3)
+{
+  for(q in 0:3)
+  {
+    aiccs[p+1,q+1] = AICc(arima(y12, order = c(p,0,q), method="ML"))
+  }
+}
+
+colnames(aiccs)<- c("MA(0)", "MA(1)", "MA(2)", "MA(3)")
+rownames(aiccs)<- c("AR(0)", "AR(1)", "AR(2)", "AR(3)")
+aiccs
+min(aiccs)
+```
+  The lowest two AIC values were produced by the models ARMA(2,3) and ARMA(1,2). Because we have already detrended and deseasonalized, these AIC value are for *p*,*q* and not *P*,*Q* *SARIMA(1,1,2) x (0,1,1)12* as well as *SARIMA(2,1,3) x (0,1,1)12* produce AIC values that are lower than all other AIC values nearby them in the AIC chart. 
+
+```{r diagnostic checking,eval=FALSE, include=FALSE }
+plot(residuals(fit_arma11))
+Box.test(residuals(fit_arma11), type = "Ljung")
+Box.test(residuals(fit_arma11), type ="Box-Pierce")
+shapiro.test(residuals(fit_arma11))
+op = par(mfrow = c(1,2))
+qqnorm(residuals(fit_arma11), main = "")
+qqline(residuals(fit_arma11))
+hist(residuals(fit_arma11),main="")
+title("Figure 7: QQ Plot and Histogram",line = -1, outer=TRUE)
+par(op)
+```
+
+#### Diagnostics for ARIMA(1,0,2)
+
+```{r echo=FALSE}
+plot(residuals(fit_arma12))
+Box.test(residuals(fit_arma12), type = "Ljung")
+Box.test(residuals(fit_arma12), type ="Box-Pierce")
+shapiro.test(residuals(fit_arma12))
+op = par(mfrow = c(1,2))
+qqnorm(residuals(fit_arma12), main = "")
+qqline(residuals(fit_arma12))
+hist(residuals(fit_arma12),main="")
+title("Figure 7: QQ Plot and Histogram",line = -1, outer=TRUE)
+par(op)
+```
+
+#### Diagnostics for ARIMA(2,0,3)
+
+```{r echo=FALSE}
+plot(residuals(fit_arma23))
+Box.test(residuals(fit_arma23), type = "Ljung")
+Box.test(residuals(fit_arma23), type ="Box-Pierce")
+shapiro.test(residuals(fit_arma23))
+op = par(mfrow = c(1,2))
+qqnorm(residuals(fit_arma23),main="")
+qqline(residuals(fit_arma23))
+hist(residuals(fit_arma23),main="")
+title("Figure 8: QQ Plot and Histogram",line = -1, outer=TRUE)
+par(op)
+```
+
+```{r eval=FALSE, include=FALSE}
+acf(residuals(fit_arma11),lag.max=100)
+pacf(residuals(fit_arma11),lag.max=100)
+```
+
+```{r eval=FALSE, include=FALSE}
+fit_arma11
+```
+```{r eval=FALSE, include=FALSE}
+source('plot.roots.R.txt')
+op = par(mfrow = c(1,2))
+plot.roots(NULL,polyroot(c(.7387)), main="Roots of AR part")
+plot.roots(NULL,polyroot(c(1)), main="Roots of MA part")
+par(op)
+```
+
+#### Coefficient Estimation for ARIMA(1,0,2)
+
+```{r echo=FALSE}
+fit_arma12
+```
+```{r echo=FALSE}
+source('plot.roots.R.txt')
+op = par(mfrow = c(1,2))
+plot.roots(NULL,polyroot(c(1,.8146)), main="Roots of AR part")
+plot.roots(NULL,polyroot(c(1,-1.1693,.1693)), main="Roots of MA part")
+par(op)
+```
+
+
+#### Coefficient Estimation for ARIMA(2,0,3)
+```{r echo=FALSE}
+fit_arma23
+```
+```{r echo=FALSE}
+source('plot.roots.R.txt')
+op = par(mfrow = c(1,2))
+plot.roots(NULL,polyroot(c(1,-0.0958,0.7602)), main="Roots of AR part")
+plot.roots(NULL,polyroot(c(1,-0.2247,-.9885,.2132)), main="Roots of MA part")
+par(op)
+```
+
+  
+```{r forecasting, echo=FALSE}
+fit12 = arima(candyts, order = c(1,1,2), method = "ML")
+mypred <- predict(fit12, n.ahead=12)
+candy.orig <- ts(candyts)
+ts.plot(candy.orig, xlim=c(0,455), ylim=c(40,200), main = "Figure 9: US Candy Production, Forecasted")
+points(441:452,mypred$pred, col="blue")
+lines(441:452,mypred$pred+1.96*mypred$se,lty=2,col="steelblue")
+lines(441:452,mypred$pred-1.96*mypred$se,lty=2,col="steelblue")
+
+```
+```{r echo=FALSE}
+ts.plot(candy.orig, xlim=c(430,455), ylim=c(20,200), main = "Figure 10: Twelve month Forecast of US Candy Production")
+points(441:452,mypred$pred, col="blue")
+lines(441:452,mypred$pred+1.96*mypred$se,lty=2,col="steelblue")
+lines(441:452,mypred$pred-1.96*mypred$se,lty=2,col="steelblue")
+```
+### Forecasting
+  As the last point in our data set is 8/1/17, we forecasted the US candy production for the proceding 12 months, 9/1/17-8/1/18. We can observe the 12 forecasted points in blue in figure 10, along with the 95% confidence intervals for these forecasted points. Because the uncertainty of the predictions increases with time, we see that the confidence interval widens towards the end of the forecasted points. This can be cause by the nonstationary aspect of our model. A stationary model with residuals that pass all diagnostic checks would produce a narrower, and therefore more precise confidence interval.
