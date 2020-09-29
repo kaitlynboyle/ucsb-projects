@@ -9,3 +9,7 @@ I have included the full .rmd file and the PDF full report. The project analyzes
 ### Time Series Analysis: Candy Production
 
 I have included the full .rmd file and the PDF full report. The project analyzes sales data for a large candy manufacturer for trend, seasonality and cyclical annual sales patterns over a twelve-month historical period to inform near-term forecasts.
+
+### Regression Analysis: Real Estate Data
+
+I have included the full .rmd file and the PDF full report. The project analyzes sales data for real estate to determine listing prices from home characteristics. 
